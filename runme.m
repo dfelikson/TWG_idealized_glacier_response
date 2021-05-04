@@ -1,6 +1,4 @@
-%addpath '/Users/dfelikso/Research/Projects/GrIS_Calibrated_SLR/issm';
-
-steps = [3];
+steps = [1 2 3];
 modelname = 'TWG';
 
 % Mesh
