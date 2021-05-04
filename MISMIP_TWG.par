@@ -1,0 +1,95 @@
+disp('      creating thickness');
+Lx = max(md.mesh.x); % domain length (along ice flow)
+Ly = max(md.mesh.y); % domain width (across ice flow)
+
+B0   =   150; % bedrock topography at x=0
+xbar = 15000; % characteristic along-flow length scale of the bedrock
+bx   = B0 - 728.8.*(md.mesh.x/xbar).^2 + 343.91.*(md.mesh.x/xbar).^4 - 50.57.*(md.mesh.x/xbar).^6;
+
+fc =   400; % 800; % characteristic width of the side walls of the channel
+dc =  1000; % depth of the trough compared with the side walls
+wc =  2800; % half-width of the trough
+by = dc ./ (1 + exp(-2/fc .* (md.mesh.y-Ly/2-wc))) + dc ./ (1 + exp(2/fc .* (md.mesh.y-Ly/2+wc)));
+
+zbdeep = -720; % maximum depth of the bedrock topography
+md.geometry.bed=max(bx+by,zbdeep);
+
+by0 = 1200 ./ (1 + exp(-2/fc .* (0-Ly/2-wc))) + 1200 ./ (1 + exp(2/fc .* (0-Ly/2+wc)));
+md.geometry.surface = bx+by0;
+md.geometry.base=md.geometry.bed;
+md.geometry.thickness=md.geometry.surface-md.geometry.base;
+
+disp('      creating drag');
+md.friction.coefficient=sqrt(3.160*10^6)*ones(md.mesh.numberofvertices,1); %q=1.
+md.friction.p=3*ones(md.mesh.numberofelements,1);
+md.friction.q=zeros(md.mesh.numberofelements,1);
+
+friction_coefficient_min = evalin('base', 'friction_coefficient_min');
+md.friction.coefficient = (200 - friction_coefficient_min) ./ (1 + exp(-2/fc .* (md.mesh.y-Ly/2-wc))) + (200 - friction_coefficient_min) ./ (1 + exp(2/fc .* (md.mesh.y-Ly/2+wc))) + friction_coefficient_min;
+md.friction.p=ones(md.mesh.numberofelements,1);
+md.friction.q=ones(md.mesh.numberofelements,1);
+
+disp('      creating flow law paramter');
+md.materials.rheology_B=1/((6.338*10^-25)^(1/3))*ones(md.mesh.numberofvertices,1);
+md.materials.rheology_B=cuffey(273.15-3)*ones(md.mesh.numberofvertices,1);
+md.materials.rheology_n=3*ones(md.mesh.numberofelements,1);
+md.materials.rheology_law='None';
+
+disp('      boundary conditions for diagnostic model');
+%Create node on boundary fist (because we cannot use mesh)
+md=SetMarineIceSheetBC(md,'Exp/Front_TWG.exp');
+md.mask.ice_levelset(:)=-1;
+md.mask.groundedice_levelset(:)=+1;
+pos=find(md.mesh.x<30000.1 & md.mesh.x>29999.9);
+md.mask.ice_levelset(pos)=0;
+md.stressbalance.spcvx(:)=NaN;
+md.stressbalance.spcvy(:)=NaN;
+pos=find((md.mesh.y<8000.1 & md.mesh.y>7999.9) | (md.mesh.y<0.1 & md.mesh.y>-0.1));
+%md.stressbalance.spcvx(pos)=0;
+md.stressbalance.spcvy(pos)=0;
+%Extra check needed to remove spcvz BCs along the front ... not sure why they're there ... something in SetMarineIceSheetBC
+pos = find(ContourToNodes(md.mesh.x,md.mesh.y,'Exp/Front_TWG.exp',2));
+md.stressbalance.spcvz(pos)=NaN;
+pos=find(md.mesh.x<0.1 & md.mesh.x>-0.1);
+md.stressbalance.spcvy(pos)=0;
+md.stressbalance.spcvx(pos)=0;
+
+
+md.stressbalance.spcvx(pos)=4000;
+md.stressbalance.spcvx(pos)=-( 700 ./ (1 + exp(-2/fc .* (md.mesh.y(pos)-Ly/2-wc))) + 700 ./ (1 + exp(2/fc .* (md.mesh.y(pos)-Ly/2+wc))) + 10 ) + 700;
+md.masstransport.spcthickness(pos)=md.geometry.thickness(pos);
+
+
+disp('      forcing conditions');
+%md.basalforcings=mismipbasalforcings(md);
+md.basalforcings=basalforcings();
+%md.basalforcings.meltrate_factor=0;
+%md.basalforcings.threshold_thickness=75;
+%md.basalforcings.upperdepth_melt=-100;
+md.smb.mass_balance = 0.0 - (0.5 / (max(md.mesh.x)-min(md.mesh.x)) ) .* md.mesh.x;
+%md.smb.mass_balance = 0.6 * ones(md.mesh.numberofvertices,1);
+%md.basalforcings.geothermalflux=0.5*ones(md.mesh.numberofvertices,1);
+ud.basalforcings.geothermalflux=0.05*ones(md.mesh.numberofvertices,1);
+md.basalforcings.groundedice_melting_rate=0.*ones(md.mesh.numberofvertices,1);
+md.basalforcings.floatingice_melting_rate=0.*ones(md.mesh.numberofvertices,1);
+
+md.thermal.spctemperature=NaN*ones(md.mesh.numberofvertices,1);
+md.groundingline.migration='SubelementMigration';
+
+%Parameters
+md.materials.rho_ice=918;
+md.materials.rho_water=1028;
+md.constants.g=9.8;
+md.constants.yts=31556926;
+md.transient.issmb=0;
+md.transient.isthermal=0;
+md.transient.isgroundingline=1;
+md.stressbalance.isnewton=0;
+
+%Initialization
+md.initialization.vx=ones(md.mesh.numberofvertices,1);
+md.initialization.vy=ones(md.mesh.numberofvertices,1);
+md.initialization.vz=ones(md.mesh.numberofvertices,1);
+md.initialization.vel=sqrt(2)*ones(md.mesh.numberofvertices,1);
+md.initialization.pressure=md.constants.g*md.materials.rho_ice*md.geometry.thickness;
+md.initialization.temperature=273*ones(md.mesh.numberofvertices,1);
