@@ -14,8 +14,8 @@ m_Budd = 1;     % 1 | 1/3   [ISSM convention is p=1/m, q=p, s=1/p (s=m), r=q/p (
 m_Weertman = 1; % 1 | 1/3   [ISSM convention is m=1/m]
 
 % Terminus setup
-terminus0_x = 26000;
-magnitude = 1250;
+terminus0_x = 26500;
+magnitude = 1000;
 
 % Cluster parameters
 cluster = generic('name', oshostname(), 'np', 2);
@@ -51,7 +51,7 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    md.transient.requested_outputs={'default','IceVolumeAboveFloatation'};
 
 	md.timestepping.time_step=1;
-	md.timestepping.final_time=100; %50000; %200000;
+	md.timestepping.final_time=100;
 	
    if meshsize == 100
       md.timestepping.time_step = 0.025;
@@ -72,10 +72,6 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
 	md.timestepping.final_time=50;
 	md.settings.output_frequency=10;
    
-   % Adaptive timestepping
-   %md.timestepping = timesteppingadaptive(md.timestepping);
-	%md.timestepping.time_step_min = 0.05;
-
 	md.stressbalance.abstol=NaN;
 	md.stressbalance.restol=1e-4;
    md.stressbalance.maxiter=10;
@@ -208,7 +204,6 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    % Start with Transient_Steadystate_noFloating because this gets us close to the terminus position
    % that we want to start with
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_noFloating']);
-   %md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min)]);
 
    % Transfer results to model fields
    md = transientrestart(md);
@@ -242,16 +237,6 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    %md.mask.ice_levelset(md.mesh.x >terminus0_x) = +1;
    %md.mask.ice_levelset(md.mesh.x<=terminus0_x) = -1;
 
-   % Convert to signed distance fields -- NOT NEEDED ANYMORE BECAUSE THE CODE ABOVE NOW SETS UP THE LEVELSET AS A SIGNED DISTANCE
-   %disp('Converting levelsets to signed distance fields');
-   %pos      = find(md.mask.ice_levelset<0);
-   %if exist('./TEMP.exp','file'), delete('./TEMP.exp'); end
-   %expcontourlevelzero(md,md.mask.ice_levelset,0,'./TEMP.exp');
-   %levelset = abs(ExpToLevelSet(md.mesh.x,md.mesh.y,'./TEMP.exp'));
-   %delete('./TEMP.exp');
-   %levelset(pos) = -levelset(pos);
-   %md.mask.ice_levelset = levelset;
-
    % Go solve
    md.verbose.solution=1;
    md.cluster = cluster;
@@ -274,27 +259,10 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    % Transfer results to model fields
    md = transientrestart(md);
    md.timestepping.final_time = md.timestepping.start_time + 50;
-   %if meshsize == 100
-   %   md.timestepping.time_step = 0.005;
-   %   md.settings.output_frequency = 100;
-   %elseif meshsize == 200
-   %   md.timestepping.time_step = 0.010;
-   %   md.settings.output_frequency = 50;
-   %elseif meshsize == 400
-   %   md.timestepping.time_step = 0.020;
-   %   md.settings.output_frequency = 25;
-   %elseif meshsize == 1000
-   %   md.timestepping.time_step = 0.250;
-   %   md.settings.output_frequency = 10;
-   %else
-   %   fprintf('Enter time_step into runme!\n');
-   %   return
-   %end
 
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
    md.stressbalance.maxiter = 10;
-   %md.verbose.convergence = 1;
 
    % Go solve
    md.verbose.solution=1;
@@ -369,18 +337,6 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
             fprintf(['Switching to Weertman sliding (m=' num2str(m_Weertman) ')\n']);
             fprintf('\n');
             md = friction_coefficient_conversion(md, 'budd', 'weertman', 'm', 1/m_Weertman);
-         case 'Schoof'
-            fprintf('\n');
-            fprintf(['Switching to Schoof sliding (m=' num2str(m_Schoof) ')\n']);
-            fprintf('\n');
-            %md = friction_coefficient_conversion(md, 'budd', 'schoof', 'm', 1/m_Schoof, 'C_max', 0.4);
-            
-            % TODO DEBUG
-            [~, ~, b_budd] = basalstress(md);
-            md_schoof = friction_coefficient_conversion(md, 'budd', 'schoof', 'm', 1, 'C_max', 0.4);
-            [~, ~, b_schoof] = basalstress(md_schoof);
-            return
-            % TODO DEBUG
       end
    end
 
@@ -425,7 +381,6 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
    md.stressbalance.maxiter = 10;
-   %md.verbose.convergence = 1;
 
    % Set the requested outputs
    md.stressbalance.requested_outputs={'default','StrainRatexx','StrainRateyy','StrainRatexy','StrainRateeffective'};
@@ -475,15 +430,6 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    md.stressbalance.restol = 1e-4;
    md.stressbalance.maxiter = 20; 10;
 
-	% % TODO DEBUG
-	% md.verbose.convergence = true;
-	% %md.stressbalance.abstol = 10;
-   % %md.stressbalance.restol = 1;
-	% %md.timestepping.time_step = 0.005;
-	% md.timestepping.final_time = md.timestepping.start_time + 5;
-   % md.settings.output_frequency = 1;
-   % md.stressbalance.maxiter = 20;
-
    % Activate moving boundary
    md.transient.ismovingfront = 1;
    % md.calving.calvingrate = zeros(md.mesh.numberofvertices,1);
@@ -530,158 +476,12 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) ...
-      '_1yearly' num2str(magnitude) 'mChannel_Seasonality1']),% {{{
-
-   md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
-
-   % Transfer results to model fields
-   md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 10;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 5; %50;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 1;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
-
-   % Stress-balance parameters
-   md.stressbalance.restol = 1e-4;
-   md.stressbalance.maxiter = 20;
-   %md.verbose.convergence = 1;
-
-   % Activate moving boundary
-   md.transient.ismovingfront = 1;
-
-   % Set up spclevelset
-   % NOTE: Terminus retreats/re-advances by [magnitude] over 1 year
-   levelset0 = md.mask.ice_levelset;
-   md.levelset.spclevelset = [];
-   md.levelset.spclevelset(:,end+1) = [levelset0; md.timestepping.start_time];
-   for time = md.timestepping.start_time : 1 : md.timestepping.final_time
-      signeddistance = move_terminus_levelset(md, levelset0, magnitude, -1, true);
-     
-      signeddistance(md.geometry.bed>0 & levelset0<0) = -1;
-      pos      = find(signeddistance<0);
-
-      if exist('TEMP.exp','file'), delete('TEMP.exp'); end
-      expcontourlevelzero(md, signeddistance, 0, 'TEMP.exp');
-      signeddistance = abs(ExpToLevelSet(md.mesh.x, md.mesh.y, 'TEMP.exp'));
-      delete('TEMP.exp');
-      signeddistance(pos) = -signeddistance(pos);
-      
-      md.levelset.spclevelset(:,end+1) = [signeddistance; time + 0.25];
-      %signeddistance = move_terminus_levelset(md, levelset, magnitude, +1, true);
-      md.levelset.spclevelset(:,end+1) = [levelset0; time + 1.0];
-   end
-   
-   % Set the requested outputs
-   md.stressbalance.requested_outputs={'default','StrainRatexx','StrainRateyy','StrainRatexy','StrainRateeffective'};
-   md.transient.requested_outputs={'default','IceVolumeAboveFloatation'};
-
-   % Go solve
-   md.verbose.solution=1;
-   md.cluster = cluster; if meshsize == 100 & contains(cluster.name, 'discover'), md.cluster.time = 12*3600; end
-   md.settings.waitonlock = waitonlock;
-   md = solve(md,'transient');
-   if md.settings.waitonlock == 0
-      fprintf('\n \033[103;30m Load results with: md = loadresultsfromcluster(md,''runtimename'',''%s''); \033[0m \n', md.private.runtimename);
-      fprintf(' \033[103;30m Save results with: save(''%s.mat'', ''md'', ''-v7.3''); \033[0m \n\n', [org.repository filesep org.prefix org.steps(end).string]);
-      return
-   end
-
-   % Save
-   savemodel(org,md);
-
-end % }}}
-if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) ...
-      '_1yearly' num2str(magnitude) 'mChannel_Seasonality2']),% {{{
-
-   md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
-
-   % Transfer results to model fields
-   md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 10;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 5; %50;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 1;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
-
-   % Stress-balance parameters
-   md.stressbalance.restol = 1e-4;
-   md.stressbalance.maxiter = 20;
-   %md.verbose.convergence = 1;
-
-   % Activate moving boundary
-   md.transient.ismovingfront = 1;
-
-   % Set up spclevelset
-   % NOTE: Terminus retreats/re-advances by [magnitude] over 1 year
-   levelset0 = md.mask.ice_levelset;
-   md.levelset.spclevelset = [];
-   md.levelset.spclevelset(:,end+1) = [levelset0; md.timestepping.start_time];
-   for time = md.timestepping.start_time : 1 : md.timestepping.final_time
-      signeddistance = move_terminus_levelset(md, levelset0, magnitude, -1, true);
-     
-      signeddistance(md.geometry.bed>0 & levelset0<0) = -1;
-      pos      = find(signeddistance<0);
-
-      if exist('TEMP.exp','file'), delete('TEMP.exp'); end
-      expcontourlevelzero(md, signeddistance, 0, 'TEMP.exp');
-      signeddistance = abs(ExpToLevelSet(md.mesh.x, md.mesh.y, 'TEMP.exp'));
-      delete('TEMP.exp');
-      signeddistance(pos) = -signeddistance(pos);
-      
-      md.levelset.spclevelset(:,end+1) = [signeddistance; time + 0.75];
-      %signeddistance = move_terminus_levelset(md, levelset, magnitude, +1, true);
-      md.levelset.spclevelset(:,end+1) = [levelset0; time + 1.0];
-   end
-   
-   % Set the requested outputs
-   md.stressbalance.requested_outputs={'default','StrainRatexx','StrainRateyy','StrainRatexy','StrainRateeffective'};
-   md.transient.requested_outputs={'default','IceVolumeAboveFloatation'};
-
-   % Go solve
-   md.verbose.solution=1;
-   md.cluster = cluster; if meshsize == 100 & contains(cluster.name, 'discover'), md.cluster.time = 12*3600; end
-   md.settings.waitonlock = waitonlock;
-   md = solve(md,'transient');
-   if md.settings.waitonlock == 0
-      fprintf('\n \033[103;30m Load results with: md = loadresultsfromcluster(md,''runtimename'',''%s''); \033[0m \n', md.private.runtimename);
-      fprintf(' \033[103;30m Save results with: save(''%s.mat'', ''md'', ''-v7.3''); \033[0m \n\n', [org.repository filesep org.prefix org.steps(end).string]);
-      return
-   end
-
-   % Save
-   savemodel(org,md);
-
-end % }}}
 if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_meanTerminus' num2str(magnitude) 'mChannel']),% {{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
 
    % Transfer results to model fields
-   md.timestepping.final_time = md.timestepping.start_time + 50;
+   md.timestepping.final_time = md.timestepping.start_time + 30;
    if meshsize == 100
       md.timestepping.time_step = 0.005;
       md.settings.output_frequency = 10;
@@ -700,14 +500,9 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
       return
    end
 
-	% % TODO DEBUG - high res run
-	% md.timestepping.final_time = md.timestepping.start_time + 10;
-	% md.settings.output_frequency = 1;
-
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
    md.stressbalance.maxiter = 10;
-   %md.verbose.convergence = 1;
 
    % Activate moving boundary
    md.transient.ismovingfront = 1;
@@ -725,26 +520,6 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    delete('TEMP.exp');
    signeddistance(pos) = -signeddistance(pos);
    
-   if false
-   levelset = zeros(md.mesh.numberofvertices,1);
-   levelset(md.mesh.x >  terminus0_x-magnitude/2) = +1;
-   levelset(md.mesh.x <= terminus0_x-magnitude/2) = -1;
-
-   levelset(md.geometry.bed>0 & levelset0<0) = -1;
-   
-   % Create signed distance field
-   disp('Converting levelsets to signed distance fields');
-   pos      = find(levelset<0);
-
-   if exist('TEMP.exp','file'), delete('TEMP.exp'); end
-   expcontourlevelzero(md, levelset, 0, 'TEMP.exp');
-   % (TODO possibly) Check that there is only one zero-level contour
-   signeddistance = abs(ExpToLevelSet(md.mesh.x, md.mesh.y, 'TEMP.exp'));
-   delete('TEMP.exp');
-   signeddistance(pos) = -signeddistance(pos);
-   end
-   
-   md.levelset.spclevelset = zeros(length(levelset0)+1,3);
    md.levelset.spclevelset(1:end-1,1) = levelset0;
    md.levelset.spclevelset(end,1) = md.timestepping.start_time;
    md.levelset.spclevelset(1:end-1,2) = signeddistance;
@@ -773,13 +548,12 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    savemodel(org,md);
 
 end % }}}
-
 if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_mostRetreatedTerminus' num2str(magnitude) 'mChannel']),% {{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
 
    % Transfer results to model fields
-   md.timestepping.final_time = md.timestepping.start_time + 50;
+   md.timestepping.final_time = md.timestepping.start_time + 30;
    if meshsize == 100
       md.timestepping.time_step = 0.005;
       md.settings.output_frequency = 10;
@@ -798,14 +572,9 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
       return
    end
 
-	% % TODO DEBUG - high res run
-	% md.timestepping.final_time = md.timestepping.start_time + 10;
-	% md.settings.output_frequency = 1;
-
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
    md.stressbalance.maxiter = 10;
-   %md.verbose.convergence = 1;
 
    % Activate moving boundary
    md.transient.ismovingfront = 1;
@@ -822,25 +591,6 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    signeddistance = abs(ExpToLevelSet(md.mesh.x, md.mesh.y, 'TEMP.exp'));
    delete('TEMP.exp');
    signeddistance(pos) = -signeddistance(pos);
-   
-   if false
-   levelset = zeros(md.mesh.numberofvertices,1);
-   levelset(md.mesh.x >  terminus0_x-magnitude/2) = +1;
-   levelset(md.mesh.x <= terminus0_x-magnitude/2) = -1;
-
-   levelset(md.geometry.bed>0 & levelset0<0) = -1;
-   
-   % Create signed distance field
-   disp('Converting levelsets to signed distance fields');
-   pos      = find(levelset<0);
-
-   if exist('TEMP.exp','file'), delete('TEMP.exp'); end
-   expcontourlevelzero(md, levelset, 0, 'TEMP.exp');
-   % (TODO possibly) Check that there is only one zero-level contour
-   signeddistance = abs(ExpToLevelSet(md.mesh.x, md.mesh.y, 'TEMP.exp'));
-   delete('TEMP.exp');
-   signeddistance(pos) = -signeddistance(pos);
-   end
    
    md.levelset.spclevelset = zeros(length(levelset0)+1,3);
    md.levelset.spclevelset(1:end-1,1) = levelset0;
