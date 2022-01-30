@@ -22,34 +22,6 @@ cluster = generic('name', oshostname(), 'np', 2);
 cluster.interactive = 1;
 waitonlock = 10;
 
-% NOTE
-cluster=discover;
-cluster.name='discover.nccs.nasa.gov';
-cluster.login='dfelikso';
-cluster.project='s2133';
-cluster.numnodes=4;
-cluster.cpuspernode=nan; %16;
-cluster.time=5.0*60*60;
-cluster.processor='sand';
-cluster.queue='allnccs';
-cluster.codepath='/discover/nobackup/dfelikso/Software/ISSM/trunk-jpl/bin';
-cluster.executionpath='/discover/nobackup/dfelikso/Software/ISSM/trunk-jpl/execution';
-cluster.email='denis.felikson@nasa.gov';
-
-cluster.interactive = 0;
-waitonlock = 0;
-% NOTE
-
-% % NOTE
-% cluster = generic('name', 'gs615-oibserve.ndc.nasa.gov', 'np', 28, ...
-%    'login', 'dfelikso', ...
-%    'codepath', '/home/dfelikso/Software/ISSM/trunk-jpl/bin', ...
-%    'etcpath', '/home/dfelikso/Software/ISSM/trunk-jpl/etc', ...
-%    'executionpath', '/home/dfelikso/Projects/GrIS_Calibrated_SLR/ISSM/execution');
-% cluster.interactive = 0;
-% waitonlock = 0;
-% % NOTE
-
 % Run steps
 org=organizer('repository',['./Models_' modelname],'prefix',['MISMIP_' modelname '_' num2str(meshsize) 'm_'],'steps',steps);
 
