@@ -1,4 +1,4 @@
-steps = [1 2 3];
+steps = [8];
 modelname = 'TWG';
 
 % Mesh
@@ -21,6 +21,34 @@ magnitude = 1000;
 cluster = generic('name', oshostname(), 'np', 2);
 cluster.interactive = 1;
 waitonlock = 10;
+
+% NOTE
+cluster=discover;
+cluster.name='discover.nccs.nasa.gov';
+cluster.login='dfelikso';
+cluster.project='s2133';
+cluster.numnodes=4;
+cluster.cpuspernode=nan; %16;
+cluster.time=5.0*60*60;
+cluster.processor='sand';
+cluster.queue='allnccs';
+cluster.codepath='/discover/nobackup/dfelikso/Software/ISSM/trunk-jpl/bin';
+cluster.executionpath='/discover/nobackup/dfelikso/Software/ISSM/trunk-jpl/execution';
+cluster.email='denis.felikson@nasa.gov';
+
+cluster.interactive = 0;
+waitonlock = 0;
+% NOTE
+
+% % NOTE
+% cluster = generic('name', 'gs615-oibserve.ndc.nasa.gov', 'np', 28, ...
+%    'login', 'dfelikso', ...
+%    'codepath', '/home/dfelikso/Software/ISSM/trunk-jpl/bin', ...
+%    'etcpath', '/home/dfelikso/Software/ISSM/trunk-jpl/etc', ...
+%    'executionpath', '/home/dfelikso/Projects/GrIS_Calibrated_SLR/ISSM/execution');
+% cluster.interactive = 0;
+% waitonlock = 0;
+% % NOTE
 
 % Run steps
 org=organizer('repository',['./Models_' modelname],'prefix',['MISMIP_' modelname '_' num2str(meshsize) 'm_'],'steps',steps);
@@ -50,26 +78,8 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
 
    md.transient.requested_outputs={'default','IceVolumeAboveFloatation'};
 
-	md.timestepping.time_step=1;
-	md.timestepping.final_time=100;
-	
-   if meshsize == 100
-      md.timestepping.time_step = 0.025;
-      md.settings.output_frequency=1000;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency=500;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.100;
-      md.settings.output_frequency=500;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.025;
-      md.settings.output_frequency=500;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
-	md.timestepping.final_time=50;
+   md.timestepping.time_step = 0.050;
+   md.timestepping.final_time=50;
 	md.settings.output_frequency=10;
    
 	md.stressbalance.abstol=NaN;
@@ -93,23 +103,9 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
 
    % Transfer resuts to model fields
    md = transientrestart(md);
-   md.timestepping.final_time = md.timestepping.start_time + 100;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 100;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 50;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 10;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.final_time = md.timestepping.start_time + 200;
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 50;
 
    % Activate moving boundary
    md.transient.ismovingfront = 1;
@@ -160,46 +156,9 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_noFloating_extra']),% {{{1  STEP 5
-
-   md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_noFloating']);
-
-   % Transfer resuts to model fields
-   md = transientrestart(md);
-   md.timestepping.final_time = md.timestepping.start_time + 100;
-
-	if meshsize == 100 & contains(cluster.name, 'discover'), cluster.time = 10 * 3600; end
-
-   % Go solve
-   md.cluster = cluster;
-   md.settings.waitonlock = waitonlock;
-   md = solve(md,'tr');
-   if md.settings.waitonlock == 0
-      fprintf('\n \033[103;30m Load results with: md = loadresultsfromcluster(md,''runtimename'',''%s''); \033[0m \n', md.private.runtimename);
-      fprintf(' \033[103;30m Run the following:\n');
-      fprintf(' \033[103;30m  tmpResults = [md.results.TransientSolution3 md.results.TransientSolution];\n');
-      fprintf(' \033[103;30m  md.results.TransientSolution = tmpResults;\n');
-      fprintf(' \033[103;30m  md.results = rmfield(md.results, ''TransientSolution3'');\n');
-      fprintf(' \033[103;30m  clear tmpResults\n');
-      fprintf(' \033[103;30m Save results with: save(''%s.mat'', ''md'', ''-v7.3''); \033[0m \n\n', [org.repository filesep org.prefix ...
-         strrep(org.steps(end).string, '_extra', '')]);
-      return
-   end
-
-   % Combine with Transient_Steadystate_noFloating results
-   tmpResults = [md.results.TransientSolution3 md.results.TransientSolution];
-   md.results.TransientSolution = tmpResults;
-   md.results = rmfield(md.results, 'TransientSolution3');
-   clear tmpResults
-
-   % Save - cheat and save it back to Transient_Steadystate_noFloating
-   save([org.repository filesep org.prefix strrep(org.steps(end).string, '_extra', '') '.mat'], 'md', '-v7.3');
-   %savemodel(org,md);
-
-end % }}}
 
 %  Steady-state
-if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm']),%    STEP 6{{{
+if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm']),%    STEP 5{{{
 
    % Start with Transient_Steadystate_noFloating because this gets us close to the terminus position
    % that we want to start with
@@ -207,23 +166,9 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
 
    % Transfer results to model fields
    md = transientrestart(md);
-   md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 100;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 50;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 10;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.final_time = md.timestepping.start_time + 80;
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 50;
 
    % Set the terminus position
    md.transient.ismovingfront = 0;
@@ -252,45 +197,6 @@ if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coeff
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_extra']),%    STEP 7{{{
-
-   md = loadmodel([org.repository '/' org.prefix 'Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm.mat']);
-
-   % Transfer results to model fields
-   md = transientrestart(md);
-   md.timestepping.final_time = md.timestepping.start_time + 50;
-
-   % Stress-balance parameters
-   md.stressbalance.restol = 1e-4;
-   md.stressbalance.maxiter = 10;
-
-   % Go solve
-   md.verbose.solution=1;
-   md.cluster = cluster;
-   md.settings.waitonlock = waitonlock;
-   md = solve(md,'tr');
-   if md.settings.waitonlock == 0
-      fprintf('\n \033[103;30m Load results with: md = loadresultsfromcluster(md,''runtimename'',''%s''); \033[0m \n', md.private.runtimename);
-      fprintf(' \033[103;30m Run the following:\n');
-      fprintf(' \033[103;30m  tmpResults = [md.results.TransientSolution4 md.results.TransientSolution];\n');
-      fprintf(' \033[103;30m  md.results.TransientSolution = tmpResults;\n');
-      fprintf(' \033[103;30m  md.results = rmfield(md.results, ''TransientSolution4'');\n');
-      fprintf(' \033[103;30m  clear tmpResults \033[0m\n');
-      fprintf(' \033[103;30m Save results with: save(''%s.mat'', ''md'', ''-v7.3''); \033[0m \n\n', [org.repository filesep org.prefix ...
-         strrep(org.steps(end).string, '_extra', '')]);
-      return
-   end
-
-   % Combine results
-   tmpResults = [md.results.TransientSolution4 md.results.TransientSolution];
-   md.results.TransientSolution = tmpResults;
-   md.results = rmfield(md.results, 'TransientSolution4');
-   clear tmpResults
-
-   % Save - cheat and save it back to Transient_Steadystate_noFloating
-   save([org.repository filesep org.prefix strrep(org.steps(end).string, '_extra', '') '.mat'], 'md', '-v7.3');
-
-end % }}}
 
 % Switch sliding law
 switch friction_law %%{{{
@@ -299,7 +205,7 @@ switch friction_law %%{{{
    case 'Weertman'
       m = m_Weertman;
 end %%}}}
-if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]),%    STEP 8{{{
+if perform(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]),%    STEP 6{{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm']);
    md = transientrestart(md);
@@ -364,19 +270,8 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
 
    % Transfer results to model fields
    md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 100;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 50;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 50;
 
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
@@ -403,28 +298,14 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_1yearly' num2str(magnitude) 'mChannel']),% {{{
+if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_1yearly' num2str(magnitude) 'm']),% {{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
 
    % Transfer results to model fields
    md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 10;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 5;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 2;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 1;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 5;
    
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
@@ -463,7 +344,7 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
 
    % Go solve
    md.verbose.solution=1;
-   md.cluster = cluster; if meshsize == 100 & contains(cluster.name, 'discover'), md.cluster.time = 12*3600; end
+   md.cluster = cluster;
    md.settings.waitonlock = waitonlock;
    md = solve(md,'transient');
    if md.settings.waitonlock == 0
@@ -476,29 +357,14 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_meanTerminus' num2str(magnitude) 'mChannel']),% {{{
+if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_meanTerminus' num2str(magnitude) 'm']),% {{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
 
    % Transfer results to model fields
    md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 10;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 50;
-      %md.settings.output_frequency = 1;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 10;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 50;
 
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
@@ -535,7 +401,7 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
 
    % Go solve
    md.verbose.solution=1;
-   md.cluster = cluster; if meshsize == 100 & contains(cluster.name, 'discover'), md.cluster.time = 12*3600; end
+   md.cluster = cluster;
    md.settings.waitonlock = waitonlock;
    md = solve(md,'transient');
    if md.settings.waitonlock == 0
@@ -548,29 +414,14 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
    savemodel(org,md);
 
 end % }}}
-if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_mostRetreatedTerminus' num2str(magnitude) 'mChannel']),% {{{
+if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m) '_mostRetreatedTerminus' num2str(magnitude) 'm']),% {{{
 
    md = loadmodel(org, ['Transient_Steadystate_frictionCoeffMin' num2str(friction_coefficient_min) '_terminus' num2str(terminus0_x) 'm_friction' friction_law sprintf('%3.1f',m)]);
 
    % Transfer results to model fields
    md.timestepping.final_time = md.timestepping.start_time + 30;
-   if meshsize == 100
-      md.timestepping.time_step = 0.005;
-      md.settings.output_frequency = 10;
-   elseif meshsize == 200
-      md.timestepping.time_step = 0.010;
-      md.settings.output_frequency = 50;
-      %md.settings.output_frequency = 1;
-   elseif meshsize == 400
-      md.timestepping.time_step = 0.020;
-      md.settings.output_frequency = 25;
-   elseif meshsize == 1000
-      md.timestepping.time_step = 0.050;
-      md.settings.output_frequency = 10;
-   else
-      fprintf('Enter time_step into runme!\n');
-      return
-   end
+   md.timestepping.time_step = 0.010;
+   md.settings.output_frequency = 50;
 
    % Stress-balance parameters
    md.stressbalance.restol = 1e-4;
@@ -608,7 +459,7 @@ if perform(org, ['Transient_frictionCoeffMin' num2str(friction_coefficient_min) 
 
    % Go solve
    md.verbose.solution=1;
-   md.cluster = cluster; if meshsize == 100 & contains(cluster.name, 'discover'), md.cluster.time = 12*3600; end
+   md.cluster = cluster;
    md.settings.waitonlock = waitonlock;
    md = solve(md,'transient');
    if md.settings.waitonlock == 0
